@@ -23,7 +23,7 @@
     --body:'Space Grotesk',sans-serif;
   }
   *{margin:0;padding:0;box-sizing:border-box}
-  html{scroll-behavior:smooth}
+  html{scroll-behavior:auto}
   body{
     background:var(--bg);
     color:var(--navy);
@@ -678,6 +678,39 @@
 <script>
 (function(){
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* ---------- smooth eased scroll for in-page anchor links ---------- */
+  (function(){
+    const easeInOutCubic = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+    function smoothScrollTo(targetY, duration){
+      const startY = window.scrollY;
+      const diff = targetY - startY;
+      if(reduceMotion || Math.abs(diff) < 2){ window.scrollTo(0, targetY); return; }
+      let start = null;
+      function step(ts){
+        if(start === null) start = ts;
+        const progress = Math.min((ts - start) / duration, 1);
+        window.scrollTo(0, startY + diff * easeInOutCubic(progress));
+        if(progress < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+    document.querySelectorAll('a[href^="#"]').forEach(link=>{
+      const id = link.getAttribute('href');
+      if(id === '#' || id.length < 2) return;
+      link.addEventListener('click', e=>{
+        const target = document.querySelector(id);
+        if(!target) return;
+        e.preventDefault();
+        const navH = 86; // clear the fixed pill nav
+        const targetY = Math.max(0, target.getBoundingClientRect().top + window.scrollY - navH);
+        const dist = Math.abs(targetY - window.scrollY);
+        const duration = Math.min(1100, Math.max(500, dist * 0.6));
+        smoothScrollTo(targetY, duration);
+        history.pushState(null, '', id);
+      }, {passive:false});
+    });
+  })();
 
   /* ---------- DexScreener live chart ----------
      Set RWA_PAIR to the Solana pair (or token) address once $RWA launches.
