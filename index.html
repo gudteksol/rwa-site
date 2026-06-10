@@ -47,16 +47,12 @@
     display:flex;flex-direction:column;align-items:center;gap:1.4rem;
     padding:0 1.5rem;text-align:center;
   }
-  .loader-coin{position:relative;width:128px;height:128px;display:grid;place-items:center}
+  .loader-coin{position:relative;width:128px;height:128px;display:grid;place-items:center;perspective:700px}
   .loader-coin img{
-    width:96px;height:96px;border-radius:24px;display:block;
+    width:104px;height:104px;border-radius:24px;display:block;
     box-shadow:0 18px 40px rgba(39,117,202,.28);
-    animation:loaderBob 2.4s ease-in-out infinite;
-  }
-  .loader-ring{
-    position:absolute;inset:0;border-radius:50%;
-    border:3px solid var(--line);border-top-color:var(--blue);
-    animation:loaderSpin 1s linear infinite;
+    transform-style:preserve-3d;backface-visibility:hidden;
+    animation:loaderFlip 1.6s cubic-bezier(.55,.1,.45,.9) infinite;
   }
   .loader-word{
     font-family:var(--display);font-weight:900;
@@ -76,13 +72,13 @@
     font-family:var(--display);font-weight:700;font-size:.85rem;
     letter-spacing:.1em;color:var(--blue-deep);
   }
-  @keyframes loaderSpin{to{transform:rotate(360deg)}}
-  @keyframes loaderBob{
-    0%,100%{transform:translateY(0) rotate(-3deg)}
-    50%{transform:translateY(-10px) rotate(3deg)}
+  @keyframes loaderFlip{
+    0%{transform:rotateY(0deg) scale(1)}
+    50%{transform:rotateY(180deg) scale(1.08)}
+    100%{transform:rotateY(360deg) scale(1)}
   }
   @media (prefers-reduced-motion: reduce){
-    .loader-coin img,.loader-ring{animation:none}
+    .loader-coin img{animation:none}
   }
 
   /* ---------- ambient background ---------- */
@@ -482,7 +478,6 @@
   <div class="loader-inner">
     <div class="loader-coin">
       <img data-coin alt="$RWA logo loading">
-      <span class="loader-ring" aria-hidden="true"></span>
     </div>
     <div class="loader-word">REAL WORLD ASSES</div>
     <div class="loader-bar" aria-hidden="true"><span></span></div>
