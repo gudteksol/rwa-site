@@ -47,10 +47,10 @@
     display:flex;flex-direction:column;align-items:center;gap:1.4rem;
     padding:0 1.5rem;text-align:center;
   }
-  .loader-coin{position:relative;width:128px;height:128px;display:grid;place-items:center;perspective:700px}
+  .loader-coin{position:relative;width:140px;height:140px;display:grid;place-items:center;perspective:700px}
   .loader-coin img{
-    width:104px;height:104px;border-radius:24px;display:block;
-    box-shadow:0 18px 40px rgba(39,117,202,.28);
+    width:128px;height:128px;border-radius:50%;display:block;object-fit:cover;
+    box-shadow:0 18px 44px rgba(39,117,202,.4);
     transform-style:preserve-3d;backface-visibility:hidden;
     animation:loaderFlip 1.6s cubic-bezier(.55,.1,.45,.9) infinite;
   }
@@ -477,7 +477,7 @@
 <div id="loader" role="status" aria-live="polite">
   <div class="loader-inner">
     <div class="loader-coin">
-      <img data-coin alt="$RWA logo loading">
+      <img src="/rwa-coin.png" alt="$RWA logo loading">
     </div>
     <div class="loader-word">REAL WORLD ASSES</div>
     <div class="loader-bar" aria-hidden="true"><span></span></div>
