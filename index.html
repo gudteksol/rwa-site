@@ -726,12 +726,14 @@
   window.addEventListener('scroll', onScroll, {passive:true});
   onScroll();
 
-  // hero coin: scroll-linked spin + mouse tilt (combined so they don't conflict)
+  // hero coin: scroll-linked spin + parallax hold + mouse tilt (combined so they don't conflict)
   const coin = document.getElementById('heroCoin');
-  let heroSpin = 0, heroTiltX = 0, heroTiltY = 0;
+  let heroSpin = 0, heroHold = 0, heroTiltX = 0, heroTiltY = 0;
   function renderHeroCoin(){
     coin.style.transform =
-      'rotateX(' + heroTiltX.toFixed(2) + 'deg) rotateY(' + (heroSpin + heroTiltY).toFixed(2) + 'deg)';
+      'translateY(' + heroHold.toFixed(1) + 'px) ' +
+      'rotateX(' + heroTiltX.toFixed(2) + 'deg) ' +
+      'rotateY(' + (heroSpin + heroTiltY).toFixed(2) + 'deg)';
   }
   if(!reduceMotion){
     window.addEventListener('pointermove', e=>{
@@ -740,8 +742,11 @@
       renderHeroCoin();
     }, {passive:true});
     window.addEventListener('scroll', ()=>{
-      // spin 1.5 full turns over the first viewport of scrolling
-      heroSpin = (window.scrollY / window.innerHeight) * 540;
+      const y = window.scrollY;
+      // spin ~2 full turns over the first viewport of scrolling
+      heroSpin = (y / window.innerHeight) * 720;
+      // gentle parallax "hold" so the coin lingers slightly while spinning
+      heroHold = Math.min(y * 0.18, 90);
       renderHeroCoin();
     }, {passive:true});
     renderHeroCoin();
