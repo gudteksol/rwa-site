@@ -330,9 +330,9 @@ const CONFIG = {
     <h2 class="reveal">Curves only go up.</h2>
     <p class="sub reveal">No roadmap. No promises. Just a chart shaped exactly the way you’d hope.</p>
     <div class="stats">
-      <div class="stat reveal"><div class="big">∞</div><div class="lbl">Potential</div><div class="det">Unaudited. Unbothered.</div></div>
-      <div class="stat reveal"><div class="big" data-count="100" data-suffix="%">0%</div><div class="lbl">Community owned</div><div class="det">Every cheek accounted for.</div></div>
-      <div class="stat reveal"><div class="big">$$$</div><div class="lbl">Real value</div><div class="det">Backed by the realest asset.</div></div>
+      <div class="stat reveal" id="stat1"><div class="big" id="statMc">∞</div><div class="lbl" id="statMcLbl">Potential</div><div class="det" id="statMcDet">Unaudited. Unbothered.</div></div>
+      <div class="stat reveal" id="stat2"><div class="big" id="statVol" data-count="100" data-suffix="%">0%</div><div class="lbl" id="statVolLbl">Community owned</div><div class="det" id="statVolDet">Every cheek accounted for.</div></div>
+      <div class="stat reveal" id="stat3"><div class="big" id="statLiq">$$$</div><div class="lbl" id="statLiqLbl">Real value</div><div class="det" id="statLiqDet">Backed by the realest asset.</div></div>
     </div>
     <div class="vibes reveal">
       <span>$RWA / vibes</span>
@@ -437,6 +437,7 @@ document.getElementById('memeTrack').innerHTML = cardHTML + cardHTML;
 
 /* ---------- PRICE ENGINE (shared, up-only with tiny fake-out dips) ---------- */
 let price = 0.0420;
+let LIVE_DATA = false; /* flips true once real DexScreener data arrives */
 const history = [];
 const MAXPTS = 160;
 for(let i=0;i<MAXPTS;i++){ stepPrice(); }
@@ -510,11 +511,11 @@ const startPrice = price;
 let frame = 0;
 function loop(){
   frame++;
-  if(frame % 36 === 0) stepPrice();
+  if(!LIVE_DATA && frame % 36 === 0) stepPrice();
   drawCurve(heroCv, hctx, {scale:.55, lift:.06, lw:2, lineA:.22, glow:false, fill:true, fillA:.06});
   drawCurve(chartCv, cctx, {scale:.78, lift:.08, lw:3, lineA:.95, glow:true, fill:true, fillA:.18});
   drawCurve(sparkCv, sctx, {scale:.8, lift:.1, lw:2, lineA:.9, glow:false, fill:false, fillA:0});
-  if(frame % 12 === 0){
+  if(!LIVE_DATA && frame % 12 === 0){
     const f = fmt(price);
     bigPx.textContent = f; heroPx.textContent = f;
     const d = ((price-startPrice)/startPrice*100);
@@ -535,7 +536,7 @@ const milestones = {10:'double digits. the market notices.', 25:'institutional i
 apprBtn.addEventListener('click', (e)=>{
   apprCount++;
   apprCountEl.textContent = apprCount;
-  stepPrice(price * (0.04 + Math.random()*0.05)); /* pump it */
+  if(!LIVE_DATA) stepPrice(price * (0.04 + Math.random()*0.05)); /* pump it (placeholder only) */
   /* coin flies from the button */
   const c = document.createElement('img');
   c.src = COIN_SRC; c.className = 'fly-coin';
@@ -617,6 +618,80 @@ if(pumpURL){ const p=document.getElementById('footPump'); p.href=pumpURL; p.styl
   // drop the "simulated" disclaimer wording in the sub copy
   const sub = document.querySelector('#chartSec .sub');
   if(sub) sub.textContent = "Real-time $RWA price action, live from DexScreener.";
+})();
+
+/* ---------- LIVE MARKET DATA (DexScreener token API) ----------
+   Once CONFIG.CA is set, fetch real numbers and feed them into the
+   hero price chip, the chart price readout, and the 3 stat cards.
+   Refreshes every 30s. Falls back silently to the placeholder
+   showcase values if the token isn't indexed yet or a fetch fails. */
+(function(){
+  if(!hasCA) return; // pre-launch → keep playful placeholders
+  const CA = CONFIG.CA.trim();
+
+  function compact(n){
+    if(n == null || isNaN(n)) return null;
+    if(n < 1000) return '$' + n.toFixed(0);
+    if(n < 1e6)  return '$' + (n/1e3).toFixed(1) + 'K';
+    if(n < 1e9)  return '$' + (n/1e6).toFixed(2) + 'M';
+    return '$' + (n/1e9).toFixed(2) + 'B';
+  }
+  function setText(id, txt){ const el = document.getElementById(id); if(el && txt != null) el.textContent = txt; }
+
+  async function pull(){
+    try{
+      const res = await fetch('https://api.dexscreener.com/latest/dex/tokens/' + CA, {cache:'no-store'});
+      if(!res.ok) return;
+      const data = await res.json();
+      const pairs = (data && data.pairs) || [];
+      if(!pairs.length) return; // not indexed yet
+      // pick the most liquid Solana pair
+      const pair = pairs
+        .filter(p => p.chainId === 'solana')
+        .sort((a,b)=> (b.liquidity?.usd||0) - (a.liquidity?.usd||0))[0] || pairs[0];
+      if(!pair) return;
+
+      const priceUsd = parseFloat(pair.priceUsd);
+      const change   = pair.priceChange ? parseFloat(pair.priceChange.h24) : null;
+      const mc       = pair.marketCap || pair.fdv || null;
+      const vol       = pair.volume ? pair.volume.h24 : null;
+      const liq       = pair.liquidity ? pair.liquidity.usd : null;
+
+      LIVE_DATA = true; // take over from the simulated engine
+
+      // price readouts
+      if(!isNaN(priceUsd)){
+        const f = fmt(priceUsd);
+        setText('bigPx', f);
+        setText('heroPx', f);
+        // keep the curve visually moving with the real latest price
+        price = priceUsd; history.push(priceUsd); if(history.length>MAXPTS) history.shift();
+      }
+      if(change != null && !isNaN(change)){
+        const up = change >= 0;
+        const el = document.getElementById('pxDelta');
+        if(el){
+          el.textContent = (up?'▲ +':'▼ ') + change.toFixed(2) + '%';
+          el.style.color = up ? 'var(--green)' : '#d24a4a';
+        }
+      }
+
+      // stat cards → real fundamentals
+      const mcTxt = compact(mc);
+      if(mcTxt){ setText('statMc', mcTxt); setText('statMcLbl','Market cap'); setText('statMcDet','Live from DexScreener.'); }
+      const volTxt = compact(vol);
+      if(volTxt){
+        const v = document.getElementById('statVol');
+        if(v){ v.removeAttribute('data-count'); v.removeAttribute('data-suffix'); v.textContent = volTxt; }
+        setText('statVolLbl','24h volume'); setText('statVolDet','Cheeks changing hands.');
+      }
+      const liqTxt = compact(liq);
+      if(liqTxt){ setText('statLiq', liqTxt); setText('statLiqLbl','Liquidity'); setText('statLiqDet','Backed by the realest asset.'); }
+    }catch(err){ /* network/CORS hiccup → keep last good values */ }
+  }
+
+  pull();
+  setInterval(pull, 30000);
 })();
 
 /* ---------- PARALLAX FLOAT COINS ---------- */
