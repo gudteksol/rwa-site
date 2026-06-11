@@ -28,6 +28,7 @@
 }
 *{margin:0;padding:0;box-sizing:border-box}
 html{scroll-behavior:smooth}
+section[id]{scroll-margin-top:84px}
 body{font-family:var(--body);background:var(--bg);color:var(--navy);overflow-x:hidden;line-height:1.6}
 img{max-width:100%;display:block}
 a{color:inherit;text-decoration:none}
@@ -193,6 +194,8 @@ footer{padding:40px clamp(18px,5vw,64px) 50px;text-align:center}
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
   html{scroll-behavior:auto}
   .reveal{opacity:1;transform:none}
+  /* keep the meme carousel scrolling — it's core content motion */
+  .marquee-track{animation-duration:30s !important;animation-iteration-count:infinite !important}
 }
 </style>
 </head>
@@ -420,28 +423,8 @@ const cardHTML = MEMES.map((src,i)=>
   `<div class="meme-card"><img class="meme" src="${src}" alt="$RWA meme" loading="lazy"><span class="tag">${tags[i]}</span><img class="stamp" src="${COIN_SRC}" alt="" aria-hidden="true"></div>`
 ).join('');
 const memeTrack = document.getElementById('memeTrack');
+/* duplicate the card set so the pure-CSS -50% loop is seamless */
 memeTrack.innerHTML = cardHTML + cardHTML;
-/* JS-driven infinite right→left scroll (robust across browsers) */
-(function(){
-  memeTrack.style.animation = 'none'; /* take over from CSS keyframe */
-  let offset = 0, last = performance.now(), paused = false;
-  const speed = 55; /* px per second */
-  const marquee = memeTrack.parentElement;
-  marquee.addEventListener('mouseenter', ()=>paused = true);
-  marquee.addEventListener('mouseleave', ()=>paused = false);
-  function tick(now){
-    const dt = (now - last) / 1000; last = now;
-    if(!paused){
-      offset += speed * dt;
-      const half = memeTrack.scrollWidth / 2;
-      if(half > 0 && offset >= half) offset -= half; /* seamless reset */
-      memeTrack.style.transform = 'translateX(' + (-offset) + 'px)';
-    }
-    requestAnimationFrame(tick);
-  }
-  if(reduceMotion){ memeTrack.style.transform = 'translateX(0)'; }
-  else { requestAnimationFrame(tick); }
-})();
 
 /* ---------- PRICE ENGINE (decorative curve, up-only with tiny fake-out dips) ---------- */
 let price = 0.0420;
@@ -602,44 +585,80 @@ if(!reduceMotion){
   });
 }
 
-/* ---------- SCROLL REVEALS ---------- */
-const io = new IntersectionObserver(es=>{
-  es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
-},{threshold:.18});
-document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+/* ---------- SCROLL REVEALS (IntersectionObserver + rect fallback) ---------- */
+(function(){
+  const items = [...document.querySelectorAll('.reveal')];
+  function show(el){ el.classList.add('in'); }
 
-/* ---------- COUNT-UP STATS ---------- */
-const cio = new IntersectionObserver(es=>{
-  es.forEach(e=>{
-    if(!e.isIntersecting) return;
-    const el = e.target, target = +el.dataset.count, suffix = el.dataset.suffix||'';
+  /* Fallback that can never get stuck: reveal anything near/inside the viewport. */
+  function checkReveals(){
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    let remaining = false;
+    items.forEach(el=>{
+      if(el.classList.contains('in')) return;
+      const r = el.getBoundingClientRect();
+      if(r.top < vh * 0.92 && r.bottom > 0) show(el);
+      else remaining = true;
+    });
+    return remaining;
+  }
+
+  /* Primary: IntersectionObserver when it works. */
+  let ioFired = false;
+  try{
+    const io = new IntersectionObserver(es=>{
+      es.forEach(e=>{ if(e.isIntersecting){ ioFired = true; show(e.target); io.unobserve(e.target); } });
+    },{threshold:.15, rootMargin:'0px 0px -8% 0px'});
+    items.forEach(el=>io.observe(el));
+  }catch(err){ /* no IO support → rely on fallback */ }
+
+  /* Fallback hooks. */
+  window.addEventListener('scroll', checkReveals, {passive:true});
+  window.addEventListener('resize', checkReveals);
+  window.addEventListener('load', checkReveals);
+  checkReveals();
+  /* Safety net: if IO never fired shortly after load, force-check a few times. */
+  let ticks = 0;
+  const guard = setInterval(()=>{
+    checkReveals();
+    if(++ticks > 8 || items.every(el=>el.classList.contains('in'))) clearInterval(guard);
+  }, 350);
+})();
+
+/* ---------- COUNT-UP STATS (IntersectionObserver + rect fallback) ---------- */
+(function(){
+  const items = [...document.querySelectorAll('[data-count]')];
+  function run(el){
+    if(el._counted) return; el._counted = true;
+    const target = +el.dataset.count, suffix = el.dataset.suffix||'';
     let cur = 0;
     const t = setInterval(()=>{
       cur += Math.ceil(target/30);
       if(cur >= target){ cur = target; clearInterval(t); }
       el.textContent = cur + suffix;
     }, 30);
-    cio.unobserve(el);
-  });
-},{threshold:.6});
-document.querySelectorAll('[data-count]').forEach(el=>cio.observe(el));
-
-/* ---------- SMOOTH SCROLL FOR ANCHOR BUTTONS (eased, nav-aware) ---------- */
-(function(){
-  const easeInOutCubic = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
-  function scrollToY(targetY, duration){
-    const startY = window.scrollY, diff = targetY - startY;
-    if(reduceMotion || Math.abs(diff) < 2){ window.scrollTo(0, targetY); return; }
-    let start = null;
-    function step(ts){
-      if(start === null) start = ts;
-      const p = Math.min((ts - start) / duration, 1);
-      window.scrollTo(0, startY + diff * easeInOutCubic(p));
-      if(p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
   }
-  const navH = ()=> (document.querySelector('nav')?.offsetHeight || 0) + 14;
+  function check(){
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    items.forEach(el=>{
+      if(el._counted) return;
+      const r = el.getBoundingClientRect();
+      if(r.top < vh * 0.9 && r.bottom > 0) run(el);
+    });
+  }
+  try{
+    const cio = new IntersectionObserver(es=>{
+      es.forEach(e=>{ if(e.isIntersecting){ run(e.target); cio.unobserve(e.target); } });
+    },{threshold:.5});
+    items.forEach(el=>cio.observe(el));
+  }catch(err){}
+  window.addEventListener('scroll', check, {passive:true});
+  window.addEventListener('resize', check);
+  check();
+})();
+
+/* ---------- SMOOTH SCROLL FOR ANCHOR BUTTONS (native, nav-aware) ---------- */
+(function(){
   document.querySelectorAll('a[href^="#"]').forEach(link=>{
     const id = link.getAttribute('href');
     if(!id || id.length < 2) return;
@@ -647,11 +666,9 @@ document.querySelectorAll('[data-count]').forEach(el=>cio.observe(el));
       const target = id === '#top' ? document.body : document.querySelector(id);
       if(!target) return;
       e.preventDefault();
-      const targetY = id === '#top' ? 0 : Math.max(0, target.getBoundingClientRect().top + window.scrollY - navH());
-      const dist = Math.abs(targetY - window.scrollY);
-      scrollToY(targetY, Math.min(1100, Math.max(500, dist * 0.55)));
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       history.pushState(null, '', id);
-    }, {passive:false});
+    });
   });
 })();
 
