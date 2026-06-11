@@ -194,6 +194,8 @@ footer{padding:40px clamp(18px,5vw,64px) 50px;text-align:center}
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important}
   html{scroll-behavior:auto}
   .reveal{opacity:1;transform:none}
+  /* keep the meme carousel scrolling — it's core content motion */
+  .marquee-track{animation-duration:30s !important;animation-iteration-count:infinite !important}
 }
 </style>
 </head>
@@ -664,7 +666,7 @@ if(!reduceMotion){
       const target = id === '#top' ? document.body : document.querySelector(id);
       if(!target) return;
       e.preventDefault();
-      target.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       history.pushState(null, '', id);
     });
   });
