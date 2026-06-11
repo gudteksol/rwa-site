@@ -205,7 +205,7 @@ footer{padding:40px clamp(18px,5vw,64px) 50px;text-align:center}
    button, link and copy pill on the page wires itself up.
    ============================================================ */
 const CONFIG = {
-  CA: "",                                                     // ← paste contract address here on launch
+  CA: "CuEypNbHRF6ZmTydY99Ezmdf2CRLTAXT3t2gjwVpump",          // ← paste contract address here on launch
   PUMP_URL: "",                                               // optional: full pump.fun link (auto-built from CA if empty)
   DEXSCREENER_EMBED: "",                                      // optional: dexscreener pair URL → live chart replaces the mock
   X_COMMUNITY: "https://x.com/i/communities/2013073791119986800",
@@ -449,7 +449,18 @@ function stepPrice(impulse){
   if(history.length > MAXPTS) history.shift();
 }
 function fmt(p){
-  if(p < 1) return '$' + p.toFixed(4);
+  if(p <= 0) return '$0';
+  if(p < 1){
+    // tiny prices: show enough significant digits so it never reads $0.0000
+    if(p >= 0.01) return '$' + p.toFixed(4);
+    if(p >= 0.0001) return '$' + p.toFixed(6);
+    // very small (pump-era) prices → subscript-style "$0.0₅123"
+    const exp = Math.floor(Math.log10(p));
+    const zeros = Math.abs(exp) - 1;
+    const sub = String(zeros).replace(/[0-9]/g, d => '₀₁₂₃₄₅₆₇₈₉'[+d]);
+    const digits = Math.round(p / Math.pow(10, exp - 2)); // 3 significant digits
+    return '$0.0' + sub + digits;
+  }
   if(p < 1000) return '$' + p.toFixed(2);
   if(p < 1e6) return '$' + (p/1e3).toFixed(2) + 'K';
   if(p < 1e9) return '$' + (p/1e6).toFixed(2) + 'M';
