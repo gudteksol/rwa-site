@@ -602,27 +602,77 @@ if(!reduceMotion){
   });
 }
 
-/* ---------- SCROLL REVEALS ---------- */
-const io = new IntersectionObserver(es=>{
-  es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
-},{threshold:.18});
-document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+/* ---------- SCROLL REVEALS (IntersectionObserver + rect fallback) ---------- */
+(function(){
+  const items = [...document.querySelectorAll('.reveal')];
+  function show(el){ el.classList.add('in'); }
 
-/* ---------- COUNT-UP STATS ---------- */
-const cio = new IntersectionObserver(es=>{
-  es.forEach(e=>{
-    if(!e.isIntersecting) return;
-    const el = e.target, target = +el.dataset.count, suffix = el.dataset.suffix||'';
+  /* Fallback that can never get stuck: reveal anything near/inside the viewport. */
+  function checkReveals(){
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    let remaining = false;
+    items.forEach(el=>{
+      if(el.classList.contains('in')) return;
+      const r = el.getBoundingClientRect();
+      if(r.top < vh * 0.92 && r.bottom > 0) show(el);
+      else remaining = true;
+    });
+    return remaining;
+  }
+
+  /* Primary: IntersectionObserver when it works. */
+  let ioFired = false;
+  try{
+    const io = new IntersectionObserver(es=>{
+      es.forEach(e=>{ if(e.isIntersecting){ ioFired = true; show(e.target); io.unobserve(e.target); } });
+    },{threshold:.15, rootMargin:'0px 0px -8% 0px'});
+    items.forEach(el=>io.observe(el));
+  }catch(err){ /* no IO support → rely on fallback */ }
+
+  /* Fallback hooks. */
+  window.addEventListener('scroll', checkReveals, {passive:true});
+  window.addEventListener('resize', checkReveals);
+  window.addEventListener('load', checkReveals);
+  checkReveals();
+  /* Safety net: if IO never fired shortly after load, force-check a few times. */
+  let ticks = 0;
+  const guard = setInterval(()=>{
+    checkReveals();
+    if(++ticks > 8 || items.every(el=>el.classList.contains('in'))) clearInterval(guard);
+  }, 350);
+})();
+
+/* ---------- COUNT-UP STATS (IntersectionObserver + rect fallback) ---------- */
+(function(){
+  const items = [...document.querySelectorAll('[data-count]')];
+  function run(el){
+    if(el._counted) return; el._counted = true;
+    const target = +el.dataset.count, suffix = el.dataset.suffix||'';
     let cur = 0;
     const t = setInterval(()=>{
       cur += Math.ceil(target/30);
       if(cur >= target){ cur = target; clearInterval(t); }
       el.textContent = cur + suffix;
     }, 30);
-    cio.unobserve(el);
-  });
-},{threshold:.6});
-document.querySelectorAll('[data-count]').forEach(el=>cio.observe(el));
+  }
+  function check(){
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    items.forEach(el=>{
+      if(el._counted) return;
+      const r = el.getBoundingClientRect();
+      if(r.top < vh * 0.9 && r.bottom > 0) run(el);
+    });
+  }
+  try{
+    const cio = new IntersectionObserver(es=>{
+      es.forEach(e=>{ if(e.isIntersecting){ run(e.target); cio.unobserve(e.target); } });
+    },{threshold:.5});
+    items.forEach(el=>cio.observe(el));
+  }catch(err){}
+  window.addEventListener('scroll', check, {passive:true});
+  window.addEventListener('resize', check);
+  check();
+})();
 
 /* ---------- SMOOTH SCROLL FOR ANCHOR BUTTONS (eased, nav-aware) ---------- */
 (function(){
