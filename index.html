@@ -594,11 +594,30 @@ if(CONFIG.X_COMMUNITY){
 }
 if(CONFIG.TELEGRAM){ const t=document.getElementById('footTg'); t.href=CONFIG.TELEGRAM; t.style.display='inline'; }
 if(pumpURL){ const p=document.getElementById('footPump'); p.href=pumpURL; p.style.display='inline'; }
-/* DexScreener swap-in */
-if(CONFIG.DEXSCREENER_EMBED){
+/* DexScreener live chart swap-in:
+   uses CONFIG.DEXSCREENER_EMBED if given (full pair URL),
+   otherwise auto-builds the Solana token chart from CONFIG.CA. */
+(function(){
+  let embedURL = "";
+  if(CONFIG.DEXSCREENER_EMBED){
+    // strip any existing query so we control the embed params
+    embedURL = CONFIG.DEXSCREENER_EMBED.split("?")[0];
+  } else if(CONFIG.CA){
+    embedURL = "https://dexscreener.com/solana/" + encodeURIComponent(CONFIG.CA.trim());
+  }
+  if(!embedURL) return; // no address yet → keep the simulated chart
+
   const card = document.getElementById('chartCard');
-  card.innerHTML = '<iframe src="'+CONFIG.DEXSCREENER_EMBED+'?embed=1&theme=light&trades=0&info=0" style="width:100%;height:520px;border:0;display:block"></iframe>';
-}
+  const params = "embed=1&loadChartSettings=0&trades=0&info=0&theme=light&chartTheme=light&chartType=usd&interval=15";
+  card.innerHTML =
+    '<iframe title="$RWA live price chart" loading="lazy" ' +
+    'src="' + embedURL + '?' + params + '" ' +
+    'style="width:100%;aspect-ratio:16/10;min-height:420px;border:0;display:block;border-radius:inherit"></iframe>';
+
+  // drop the "simulated" disclaimer wording in the sub copy
+  const sub = document.querySelector('#chartSec .sub');
+  if(sub) sub.textContent = "Real-time $RWA price action, live from DexScreener.";
+})();
 
 /* ---------- PARALLAX FLOAT COINS ---------- */
 const floats = document.querySelectorAll('.float-coin');
