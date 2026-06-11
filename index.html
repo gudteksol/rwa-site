@@ -419,7 +419,29 @@ const tags = ['Exhibit A','Exhibit B','Exhibit C','Exhibit D','Exhibit E'];
 const cardHTML = MEMES.map((src,i)=>
   `<div class="meme-card"><img class="meme" src="${src}" alt="$RWA meme" loading="lazy"><span class="tag">${tags[i]}</span><img class="stamp" src="${COIN_SRC}" alt="" aria-hidden="true"></div>`
 ).join('');
-document.getElementById('memeTrack').innerHTML = cardHTML + cardHTML;
+const memeTrack = document.getElementById('memeTrack');
+memeTrack.innerHTML = cardHTML + cardHTML;
+/* JS-driven infinite right→left scroll (robust across browsers) */
+(function(){
+  memeTrack.style.animation = 'none'; /* take over from CSS keyframe */
+  let offset = 0, last = performance.now(), paused = false;
+  const speed = 55; /* px per second */
+  const marquee = memeTrack.parentElement;
+  marquee.addEventListener('mouseenter', ()=>paused = true);
+  marquee.addEventListener('mouseleave', ()=>paused = false);
+  function tick(now){
+    const dt = (now - last) / 1000; last = now;
+    if(!paused){
+      offset += speed * dt;
+      const half = memeTrack.scrollWidth / 2;
+      if(half > 0 && offset >= half) offset -= half; /* seamless reset */
+      memeTrack.style.transform = 'translateX(' + (-offset) + 'px)';
+    }
+    requestAnimationFrame(tick);
+  }
+  if(reduceMotion){ memeTrack.style.transform = 'translateX(0)'; }
+  else { requestAnimationFrame(tick); }
+})();
 
 /* ---------- PRICE ENGINE (decorative curve, up-only with tiny fake-out dips) ---------- */
 let price = 0.0420;
@@ -601,6 +623,100 @@ const cio = new IntersectionObserver(es=>{
   });
 },{threshold:.6});
 document.querySelectorAll('[data-count]').forEach(el=>cio.observe(el));
+
+/* ---------- SMOOTH SCROLL FOR ANCHOR BUTTONS (eased, nav-aware) ---------- */
+(function(){
+  const easeInOutCubic = t => t < 0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
+  function scrollToY(targetY, duration){
+    const startY = window.scrollY, diff = targetY - startY;
+    if(reduceMotion || Math.abs(diff) < 2){ window.scrollTo(0, targetY); return; }
+    let start = null;
+    function step(ts){
+      if(start === null) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      window.scrollTo(0, startY + diff * easeInOutCubic(p));
+      if(p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  const navH = ()=> (document.querySelector('nav')?.offsetHeight || 0) + 14;
+  document.querySelectorAll('a[href^="#"]').forEach(link=>{
+    const id = link.getAttribute('href');
+    if(!id || id.length < 2) return;
+    link.addEventListener('click', e=>{
+      const target = id === '#top' ? document.body : document.querySelector(id);
+      if(!target) return;
+      e.preventDefault();
+      const targetY = id === '#top' ? 0 : Math.max(0, target.getBoundingClientRect().top + window.scrollY - navH());
+      const dist = Math.abs(targetY - window.scrollY);
+      scrollToY(targetY, Math.min(1100, Math.max(500, dist * 0.55)));
+      history.pushState(null, '', id);
+    }, {passive:false});
+  });
+})();
+
+/* ---------- SCROLL PROGRESS BAR ---------- */
+(function(){
+  const bar = document.createElement('div');
+  bar.id = 'scrollProgress';
+  bar.style.cssText = 'position:fixed;top:0;left:0;height:3px;width:0;z-index:60;background:linear-gradient(90deg,var(--blue),var(--blue-deep));box-shadow:0 0 10px rgba(39,117,202,.6);transition:width .08s linear;pointer-events:none';
+  document.body.appendChild(bar);
+  function upd(){
+    const h = document.documentElement.scrollHeight - window.innerHeight;
+    bar.style.width = (h > 0 ? (window.scrollY / h) * 100 : 0) + '%';
+  }
+  window.addEventListener('scroll', upd, {passive:true});
+  window.addEventListener('resize', upd); upd();
+})();
+
+/* ---------- MAGNETIC BUY BUTTONS ---------- */
+if(!reduceMotion){
+  document.querySelectorAll('[data-buy], .btn-primary').forEach(btn=>{
+    btn.addEventListener('mousemove', e=>{
+      const r = btn.getBoundingClientRect();
+      const mx = e.clientX - r.left - r.width/2;
+      const my = e.clientY - r.top - r.height/2;
+      btn.style.transform = 'translate(' + mx*0.25 + 'px,' + my*0.35 + 'px)';
+    });
+    btn.addEventListener('mouseleave', ()=>{ btn.style.transform = ''; });
+  });
+}
+
+/* ---------- HERO COIN 3D TILT FOLLOWS MOUSE ---------- */
+(function(){
+  const coin = document.getElementById('heroCoin');
+  if(!coin || reduceMotion) return;
+  const stage = coin.closest('.coin-stage') || coin.parentElement;
+  stage.addEventListener('mousemove', e=>{
+    const r = stage.getBoundingClientRect();
+    const rx = ((e.clientY - r.top)/r.height - .5) * -22;
+    const ry = ((e.clientX - r.left)/r.width - .5) * 22;
+    coin.style.transform = 'perspective(700px) rotateX(' + rx + 'deg) rotateY(' + ry + 'deg)';
+    coin.style.animationPlayState = 'paused';
+  });
+  stage.addEventListener('mouseleave', ()=>{
+    coin.style.transform = '';
+    coin.style.animationPlayState = '';
+  });
+  /* click the coin → burst of mini coins */
+  coin.style.cursor = 'pointer';
+  coin.addEventListener('click', ()=>{
+    const r = coin.getBoundingClientRect();
+    const cx = r.left + r.width/2, cy = r.top + r.height/2;
+    for(let i=0;i<14;i++){
+      const c = document.createElement('img');
+      c.src = COIN_SRC; c.alt = '';
+      c.style.cssText = 'position:fixed;width:30px;height:30px;border-radius:50%;left:'+(cx-15)+'px;top:'+(cy-15)+'px;z-index:55;pointer-events:none';
+      document.body.appendChild(c);
+      const ang = (Math.PI*2/14)*i + Math.random()*0.4, dist = 120 + Math.random()*160;
+      c.animate([
+        {transform:'translate(0,0) scale(1) rotate(0deg)', opacity:1},
+        {transform:'translate('+Math.cos(ang)*dist+'px,'+Math.sin(ang)*dist+'px) scale(.3) rotate('+(Math.random()*720-360)+'deg)', opacity:0}
+      ],{duration:900+Math.random()*400, easing:'cubic-bezier(.2,.7,.3,1)'}).onfinish = ()=>c.remove();
+    }
+    if(typeof toast === 'function') toast('appreciation intensifies. 🍑');
+  });
+})();
 })();
 </script>
 </body>
